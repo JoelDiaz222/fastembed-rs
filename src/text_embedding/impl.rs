@@ -144,7 +144,7 @@ impl TextEmbedding {
         model: EmbeddingModel,
         cache_dir: PathBuf,
         show_download_progress: bool,
-    ) -> anyhow::Result<ApiRepo> {
+    ) -> Result<ApiRepo> {
         use crate::common::pull_from_hf;
 
         pull_from_hf(model.to_string(), cache_dir, show_download_progress)
@@ -380,6 +380,26 @@ impl TextEmbedding {
             ))
         } else {
             batches.export_with_transformer(output::transformer_with_precedence(
+                output::OUTPUT_TYPE_PRECEDENCE,
+                self.pooling.clone(),
+            ))
+        }
+    }
+
+    pub fn embed_flat<S: AsRef<str> + Send + Sync>(
+        &mut self,
+        texts: Vec<S>,
+        batch_size: Option<usize>,
+    ) -> Result<(Vec<f32>, usize, usize)> {
+        let batches = self.transform(texts, batch_size)?;
+
+        if let Some(output_key) = &self.output_key {
+            batches.export_with_transformer(output::transformer_flat(
+                output_key,
+                self.pooling.clone(),
+            ))
+        } else {
+            batches.export_with_transformer(output::transformer_flat(
                 output::OUTPUT_TYPE_PRECEDENCE,
                 self.pooling.clone(),
             ))

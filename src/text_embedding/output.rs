@@ -51,3 +51,32 @@ pub fn transformer_with_precedence(
             })
     }
 }
+
+pub fn transformer_flat(
+    output_precedence: impl OutputPrecedence,
+    pooling: Option<Pooling>,
+) -> impl Fn(&[SingleBatchOutput]) -> anyhow::Result<(Vec<f32>, usize, usize)> {
+    move |batches| {
+        let mut all = Vec::new();
+        let mut rows = 0;
+        let mut cols = 0;
+
+        for batch in batches {
+            let array = batch.select_and_pool_output(&output_precedence, pooling.clone())?;
+            let (r, c) = array.dim();
+            if cols == 0 {
+                cols = c;
+            } else {
+                debug_assert_eq!(cols, c, "inconsistent embedding dimensions");
+            }
+            rows += r;
+
+            let (mut vec, offset) = array.into_raw_vec_and_offset();
+            debug_assert_eq!(offset, Some(0), "expected contiguous array with offset 0");
+
+            all.append(&mut vec);
+        }
+
+        Ok((all, rows, cols))
+    }
+}
