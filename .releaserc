@@ -64,12 +64,11 @@
         ]
       }
     ],
-    "@semantic-release/release-notes-generator",
     "@semantic-release/github",
     [
       "semantic-release-cargo",
       {
-        "allFeatures": true,
+        "allFeatures": false,
         "check": true,
         "publishArgs": [
           "--no-verify"
@@ -106,10 +105,6 @@
           "types": [
             {
               "type": "feat",
-              "section": "🍕 Features"
-            },
-            {
-              "type": "feature",
               "section": "🍕 Features"
             },
             {

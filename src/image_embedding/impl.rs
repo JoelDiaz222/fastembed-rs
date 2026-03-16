@@ -122,7 +122,7 @@ impl ImageEmbedding {
         ImageEmbedding::list_supported_models()
             .into_iter()
             .find(|m| &m.model == model)
-            .expect("Model not found.")
+            .expect("Model not found in supported models list. This is a bug - please report it.")
     }
 
     /// Method to generate image embeddings for a Vec of image bytes
@@ -157,13 +157,16 @@ impl ImageEmbedding {
         Ok(output)
     }
 
-    /// Method to generate image embeddings for a Vec of image path
-    // Generic type to accept String, &str, OsString, &OsStr
+    /// Method to generate image embeddings for a collection of image paths.
+    ///
+    /// Accepts anything that can be referenced as a slice of elements implementing
+    /// [`AsRef<Path>`], such as `Vec<String>`, `Vec<PathBuf>`, `&[&str]`, or `&[&Path]`.
     pub fn embed<S: AsRef<Path> + Send + Sync>(
         &mut self,
-        images: Vec<S>,
+        images: impl AsRef<[S]>,
         batch_size: Option<usize>,
     ) -> anyhow::Result<Vec<Embedding>> {
+        let images = images.as_ref();
         // Determine the batch size, default if not specified
         let batch_size = batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
 
@@ -207,7 +210,7 @@ impl ImageEmbedding {
         let inputs_view: Vec<ArrayView3<f32>> = inputs.iter().map(|img| img.view()).collect();
         let pixel_values_array = ndarray::stack(ndarray::Axis(0), &inputs_view)?;
 
-        let input_name = self.session.inputs[0].name.clone();
+        let input_name = self.session.inputs()[0].name().to_string();
         let session_inputs = ort::inputs![
             input_name => Value::from_array(pixel_values_array)?,
         ];
@@ -217,7 +220,10 @@ impl ImageEmbedding {
         // Try to get the only output key
         // If multiple, then default to few known keys `image_embeds` and `last_hidden_state`
         let last_hidden_state_key = match outputs.len() {
-            1 => vec![outputs.keys().next().unwrap()],
+            1 => vec![outputs
+                .keys()
+                .next()
+                .ok_or_else(|| anyhow!("Expected one output but found none"))?],
             _ => vec!["image_embeds", "last_hidden_state"],
         };
 
@@ -252,8 +258,12 @@ impl ImageEmbedding {
                 // For 2D output [batch_size, hidden_size]
                 output_array
                     .outer_iter()
-                    .map(|row| normalize(row.as_slice().unwrap()))
-                    .collect()
+                    .map(|row| {
+                        row.as_slice()
+                            .ok_or_else(|| anyhow!("Failed to convert array row to slice"))
+                            .map(normalize)
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?
             }
             _ => {
                 return Err(anyhow!(

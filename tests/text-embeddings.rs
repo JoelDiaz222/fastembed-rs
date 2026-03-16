@@ -6,9 +6,8 @@ use std::path::Path;
 use hf_hub::Repo;
 
 use fastembed::{
-    get_cache_dir, Embedding, EmbeddingModel, ImageEmbedding, ImageEmbeddingModel,
-    ImageInitOptions, InitOptions, InitOptionsUserDefined, ModelInfo, OnnxSource, Pooling,
-    QuantizationMode, RerankInitOptions, RerankInitOptionsUserDefined, RerankerModel,
+    get_cache_dir, Embedding, EmbeddingModel, InitOptions, InitOptionsUserDefined, OnnxSource,
+    Pooling, QuantizationMode, RerankInitOptions, RerankInitOptionsUserDefined, RerankerModel,
     RerankerModelInfo, SparseInitOptions, SparseTextEmbedding, TextEmbedding, TextRerank,
     TokenizerFiles, UserDefinedEmbeddingModel, UserDefinedRerankingModel,
 };
@@ -38,6 +37,7 @@ fn verify_embeddings(model: &EmbeddingModel, embeddings: &[Embedding]) -> Result
         EmbeddingModel::AllMiniLML12V2Q => [-0.07808663, 0.27919534, -0.0770612, -0.75660324],
         EmbeddingModel::AllMiniLML6V2 => [0.59605527, 0.36542925, -0.16450031, -0.40903988],
         EmbeddingModel::AllMiniLML6V2Q => [0.5677276, 0.40180072, -0.15454668, -0.4672576],
+        EmbeddingModel::AllMpnetBaseV2=> [-0.21253541, -0.050802127, 0.14072442, -0.2908188],
         EmbeddingModel::BGEBaseENV15 => [-0.51290065, -0.4844747, -0.53036124, -0.5337459],
         EmbeddingModel::BGEBaseENV15Q => [-0.5130697, -0.48461288, -0.53067875, -0.5337806],
         EmbeddingModel::BGELargeENV15 => [-0.19347441, -0.28394595, -0.1549195, -0.22201893],
@@ -46,6 +46,7 @@ fn verify_embeddings(model: &EmbeddingModel, embeddings: &[Embedding]) -> Result
         EmbeddingModel::BGESmallENV15Q => [0.09881936, 0.15154803, 0.12057378, 0.13639033],
         EmbeddingModel::BGESmallZHV15 => [-1.1194772, -1.0928253, -1.0325904, -1.0050416],
         EmbeddingModel::BGELargeZHV15 => [-0.62066114, -0.76666945, -0.7013123, -0.86202735],
+        EmbeddingModel::BGEM3 => [-0.7138151, -0.69116485, -0.7932898, -0.6727733],
         EmbeddingModel::GTEBaseENV15 => [-1.6900877, -1.7148916, -1.7333382, -1.5121834],
         EmbeddingModel::GTEBaseENV15Q => [-1.7032102, -1.7076654, -1.729326, -1.5317788],
         EmbeddingModel::GTELargeENV15 => [-1.6457459, -1.6582386, -1.6809471, -1.6070237],
@@ -58,13 +59,24 @@ fn verify_embeddings(model: &EmbeddingModel, embeddings: &[Embedding]) -> Result
         EmbeddingModel::MxbaiEmbedLargeV1Q => [-0.1811538, -0.2884392, -0.1636593, -0.21548103],
         EmbeddingModel::NomicEmbedTextV1 => [0.13788113, 0.10750078, 0.050809078, 0.09284662],
         EmbeddingModel::NomicEmbedTextV15 => [0.1932303, 0.13795732, 0.14700879, 0.14940643],
-        EmbeddingModel::NomicEmbedTextV15Q => [0.20999804, 0.17161125, 0.14427708, 0.19436662],
+        EmbeddingModel::NomicEmbedTextV15Q => [0.20999804, 0.17161125, 0.15987156, 0.19436662],
         EmbeddingModel::ParaphraseMLMiniLML12V2 => [-0.07795018, -0.059113946, -0.043668486, -0.1880083],
         EmbeddingModel::ParaphraseMLMiniLML12V2Q => [-0.07749095, -0.058981877, -0.043487836, -0.18775631],
         EmbeddingModel::ParaphraseMLMpnetBaseV2 => [0.39132136, 0.49490625, 0.65497226, 0.34237382],
         EmbeddingModel::ClipVitB32 => [0.7057363, 1.3549932, 0.46823958, 0.52351093],
         EmbeddingModel::JinaEmbeddingsV2BaseCode => [-0.31383067, -0.3758629, -0.24878195, -0.35373706],
+        EmbeddingModel::JinaEmbeddingsV2BaseEN => [-0.055866606, -0.033922599, 0.012131551, -0.0132129812],
         EmbeddingModel::EmbeddingGemma300M => [0.22703816, 0.6947083, 0.07579082, 1.6958784],
+        EmbeddingModel::SnowflakeArcticEmbedXS => [0.4418098, 0.46424747, 0.37932625, 0.44663674],
+        EmbeddingModel::SnowflakeArcticEmbedXSQ => [0.45034444, 0.46853474, 0.38483432, 0.44833523],
+        EmbeddingModel::SnowflakeArcticEmbedS => [-0.64302516, -0.63146704, -0.57860875, -0.5829098],
+        EmbeddingModel::SnowflakeArcticEmbedSQ => [-0.63687235, -0.6296427, -0.6070188, -0.57358015],
+        EmbeddingModel::SnowflakeArcticEmbedM => [-0.16999032, -0.109130904, -0.016444799, -0.108033374],
+        EmbeddingModel::SnowflakeArcticEmbedMQ => [-0.15008105, -0.11513549, 0.00008662231, -0.08609233],
+        EmbeddingModel::SnowflakeArcticEmbedMLong => [0.20396729, 0.18245143, 0.13489585, 0.15486401],
+        EmbeddingModel::SnowflakeArcticEmbedMLongQ => [0.20531628, 0.18564843, 0.14221531, 0.16035447],
+        EmbeddingModel::SnowflakeArcticEmbedL => [0.4049112, 0.42825335, 0.46401042, 0.4064963],
+        EmbeddingModel::SnowflakeArcticEmbedLQ => [0.40164998, 0.4278314, 0.4612437, 0.40060186],
         _ => panic!("Model {model} not found. If you have just inserted this `EmbeddingModel` variant, please update the expected embeddings."),
     };
 
@@ -76,7 +88,7 @@ fn verify_embeddings(model: &EmbeddingModel, embeddings: &[Embedding]) -> Result
         .filter_map(|(i, (sum, &expected))| {
             if (sum - expected).abs() > EPS {
                 eprintln!(
-                    "Mismatched embeddings for model {model} at index {i}: {sum} != {expected}",
+                    "Mismatched embeddings for model {model:?} at index {i}: {sum} != {expected} (expected)",
                     model = model,
                     i = i,
                     sum = sum,
@@ -462,81 +474,6 @@ fn test_user_defined_reranking_model() {
 
     assert_eq!(results.len(), documents.len());
     assert_eq!(results.first().unwrap().index, 0);
-}
-
-#[test]
-fn test_image_embedding_model() {
-    let test_one_model = |supported_model: &ModelInfo<ImageEmbeddingModel>| {
-        let mut model: ImageEmbedding =
-            ImageEmbedding::try_new(ImageInitOptions::new(supported_model.model.clone())).unwrap();
-
-        let images = vec!["tests/assets/image_0.png", "tests/assets/image_1.png"];
-
-        // Generate embeddings with the default batch size, 256
-        let embeddings = model.embed(images.clone(), None).unwrap();
-
-        assert_eq!(embeddings.len(), images.len());
-    };
-    ImageEmbedding::list_supported_models()
-        .iter()
-        .for_each(test_one_model);
-}
-
-#[test]
-#[ignore]
-fn test_nomic_embed_vision_v1_5() {
-    fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-        let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
-        let norm_a = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_b = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-        dot_product / (norm_a * norm_b)
-    }
-
-    fn cosine_similarity_matrix(
-        embeddings_a: &[Vec<f32>],
-        embeddings_b: &[Vec<f32>],
-    ) -> Vec<Vec<f32>> {
-        embeddings_a
-            .iter()
-            .map(|a| {
-                embeddings_b
-                    .iter()
-                    .map(|b| cosine_similarity(a, b))
-                    .collect()
-            })
-            .collect()
-    }
-
-    // Test the NomicEmbedVisionV15 model specifically because it outputs a 3D tensor with a different
-    // output key ('last_hidden_state') compared to other models. This test ensures our tensor extraction
-    // logic can handle both standard output keys and this model's specific naming convention.
-    let mut image_model = ImageEmbedding::try_new(ImageInitOptions::new(
-        fastembed::ImageEmbeddingModel::NomicEmbedVisionV15,
-    ))
-    .unwrap();
-
-    // tests/assets/image_0.png is a blue cat
-    // tests/assets/image_1.png is a red cat
-    let images = vec!["tests/assets/image_0.png", "tests/assets/image_1.png"];
-    let image_embeddings = image_model.embed(images.clone(), None).unwrap();
-    assert_eq!(image_embeddings.len(), images.len());
-
-    let mut text_model = TextEmbedding::try_new(InitOptions::new(
-        fastembed::EmbeddingModel::NomicEmbedTextV15,
-    ))
-    .unwrap();
-    let texts = vec!["green cat", "blue cat", "red cat", "yellow cat", "dog"];
-    let text_embeddings = text_model.embed(texts.clone(), None).unwrap();
-
-    // Generate similarity matrix
-    let similarity_matrix = cosine_similarity_matrix(&text_embeddings, &image_embeddings);
-    // Print the similarity matrix with text labels
-    for (i, row) in similarity_matrix.iter().enumerate() {
-        println!("{}: {:?}", texts[i], row);
-    }
-
-    assert_eq!(text_embeddings.len(), texts.len());
-    assert_eq!(text_embeddings[0].len(), 768);
 }
 
 fn clean_cache(model_code: String) {

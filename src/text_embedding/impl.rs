@@ -100,11 +100,21 @@ impl TextEmbedding {
 
         let threads = available_parallelism()?.get();
 
-        let session = Session::builder()?
-            .with_execution_providers(execution_providers)?
-            .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_intra_threads(threads)?
-            .commit_from_memory(&model.onnx_file)?;
+        let session = {
+            let mut session_builder = Session::builder()?
+                .with_execution_providers(execution_providers)?
+                .with_optimization_level(GraphOptimizationLevel::Level3)?
+                .with_intra_threads(threads)?;
+
+            for external_initializer_file in model.external_initializers {
+                session_builder = session_builder.with_external_initializer_file_in_memory(
+                    external_initializer_file.file_name,
+                    external_initializer_file.buffer.into(),
+                )?;
+            }
+
+            session_builder.commit_from_memory(&model.onnx_file)?
+        };
 
         let tokenizer = load_tokenizer(model.tokenizer_files, max_length)?;
         Ok(Self::new(
@@ -125,9 +135,9 @@ impl TextEmbedding {
         output_key: Option<OutputKey>,
     ) -> Self {
         let need_token_type_ids = session
-            .inputs
+            .inputs()
             .iter()
-            .any(|input| input.name == "token_type_ids");
+            .any(|input| input.name() == "token_type_ids");
 
         Self {
             tokenizer,
@@ -147,7 +157,8 @@ impl TextEmbedding {
     ) -> Result<ApiRepo> {
         use crate::common::pull_from_hf;
 
-        pull_from_hf(model.to_string(), cache_dir, show_download_progress)
+        let model_code = TextEmbedding::get_model_info(&model)?.model_code.clone();
+        pull_from_hf(model_code, cache_dir, show_download_progress)
     }
 
     pub fn get_default_pooling_method(model_name: &EmbeddingModel) -> Option<Pooling> {
@@ -165,6 +176,7 @@ impl TextEmbedding {
             EmbeddingModel::BGESmallENV15Q => Some(Pooling::Cls),
             EmbeddingModel::BGESmallZHV15 => Some(Pooling::Cls),
             EmbeddingModel::BGELargeZHV15 => Some(Pooling::Cls),
+            EmbeddingModel::BGEM3 => Some(Pooling::Cls),
 
             EmbeddingModel::NomicEmbedTextV1 => Some(Pooling::Mean),
             EmbeddingModel::NomicEmbedTextV15 => Some(Pooling::Mean),
@@ -173,6 +185,7 @@ impl TextEmbedding {
             EmbeddingModel::ParaphraseMLMiniLML12V2 => Some(Pooling::Mean),
             EmbeddingModel::ParaphraseMLMiniLML12V2Q => Some(Pooling::Mean),
             EmbeddingModel::ParaphraseMLMpnetBaseV2 => Some(Pooling::Mean),
+            EmbeddingModel::AllMpnetBaseV2 => Some(Pooling::Mean),
 
             EmbeddingModel::ModernBertEmbedLarge => Some(Pooling::Mean),
 
@@ -191,8 +204,20 @@ impl TextEmbedding {
             EmbeddingModel::ClipVitB32 => Some(Pooling::Mean),
 
             EmbeddingModel::JinaEmbeddingsV2BaseCode => Some(Pooling::Mean),
+            EmbeddingModel::JinaEmbeddingsV2BaseEN => Some(Pooling::Mean),
 
             EmbeddingModel::EmbeddingGemma300M => Some(Pooling::Mean),
+
+            EmbeddingModel::SnowflakeArcticEmbedXS => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedXSQ => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedS => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedSQ => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedM => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedMQ => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedMLong => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedMLongQ => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedL => Some(Pooling::Cls),
+            EmbeddingModel::SnowflakeArcticEmbedLQ => Some(Pooling::Cls),
         }
     }
 
@@ -221,6 +246,11 @@ impl TextEmbedding {
             EmbeddingModel::MxbaiEmbedLargeV1Q => QuantizationMode::Dynamic,
             EmbeddingModel::GTEBaseENV15Q => QuantizationMode::Dynamic,
             EmbeddingModel::GTELargeENV15Q => QuantizationMode::Dynamic,
+            EmbeddingModel::SnowflakeArcticEmbedXSQ => QuantizationMode::Dynamic,
+            EmbeddingModel::SnowflakeArcticEmbedSQ => QuantizationMode::Dynamic,
+            EmbeddingModel::SnowflakeArcticEmbedMQ => QuantizationMode::Dynamic,
+            EmbeddingModel::SnowflakeArcticEmbedMLongQ => QuantizationMode::Dynamic,
+            EmbeddingModel::SnowflakeArcticEmbedLQ => QuantizationMode::Dynamic,
             _ => QuantizationMode::None,
         }
     }
@@ -264,9 +294,10 @@ impl TextEmbedding {
     /// embeddings with your custom output type.
     pub fn transform<S: AsRef<str> + Send + Sync>(
         &mut self,
-        texts: Vec<S>,
+        texts: impl AsRef<[S]>,
         batch_size: Option<usize>,
     ) -> Result<EmbeddingOutput> {
+        let texts = texts.as_ref();
         // Determine the batch size according to the quantization method used.
         // Default if not specified
         let batch_size = match self.quantization {
@@ -300,7 +331,10 @@ impl TextEmbedding {
                 })?;
 
                 // Extract the encoding length and batch size
-                let encoding_length = encodings[0].len();
+                let encoding_length = encodings
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("Tokenizer returned empty encodings"))?
+                    .len();
                 let batch_size = batch.len();
 
                 let max_size = encoding_length * batch_size;
@@ -356,10 +390,10 @@ impl TextEmbedding {
         Ok(EmbeddingOutput::new(batches))
     }
 
-    /// Method to generate sentence embeddings for a Vec of texts.
+    /// Method to generate sentence embeddings for a collection of texts.
     ///
-    /// Accepts a [`Vec`] consisting of elements of either [`String`], &[`str`],
-    /// [`std::ffi::OsString`], &[`std::ffi::OsStr`].
+    /// Accepts anything that can be referenced as a slice of elements implementing
+    /// [`AsRef<str>`], such as `Vec<String>`, `Vec<&str>`, `&[String]`, or `&[&str]`.
     ///
     /// The output is a [`Vec`] of [`Embedding`]s.
     ///
@@ -369,10 +403,10 @@ impl TextEmbedding {
     /// the default output precedence and array transformer for the [`TextEmbedding`] model.
     pub fn embed<S: AsRef<str> + Send + Sync>(
         &mut self,
-        texts: Vec<S>,
+        texts: impl AsRef<[S]>,
         batch_size: Option<usize>,
     ) -> Result<Vec<Embedding>> {
-        let batches = self.transform(texts, batch_size)?;
+        let batches = self.transform(texts.as_ref(), batch_size)?;
         if let Some(output_key) = &self.output_key {
             batches.export_with_transformer(output::transformer_with_precedence(
                 output_key,

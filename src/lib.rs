@@ -54,6 +54,8 @@
 )]
 
 mod common;
+
+#[cfg(feature = "image-models")]
 mod image_embedding;
 mod init;
 mod models;
@@ -91,6 +93,7 @@ pub use crate::sparse_text_embedding::{
 };
 
 // For Image Embedding
+#[cfg(feature = "image-models")]
 pub use crate::image_embedding::{
     ImageEmbedding, ImageInitOptions, ImageInitOptionsUserDefined, UserDefinedImageEmbeddingModel,
 };
@@ -102,3 +105,13 @@ pub use crate::reranking::{
     OnnxSource, RerankInitOptions, RerankInitOptionsUserDefined, RerankResult, TextRerank,
     UserDefinedRerankingModel,
 };
+
+// For Qwen3 (candle backend)
+#[cfg(feature = "qwen3")]
+pub use crate::models::qwen3::{
+    Config as Qwen3Config, Qwen3Model, Qwen3TextEmbedding, Qwen3VLEmbedding,
+};
+
+// For Nomic Embed Text v2 MoE (candle backend)
+#[cfg(feature = "nomic-v2-moe")]
+pub use crate::models::nomic_v2_moe::{NomicConfig, NomicV2MoeTextEmbedding};

@@ -28,9 +28,9 @@ use super::{
 impl TextRerank {
     fn new(tokenizer: Tokenizer, session: Session) -> Self {
         let need_token_type_ids = session
-            .inputs
+            .inputs()
             .iter()
-            .any(|input| input.name == "token_type_ids");
+            .any(|input| input.name() == "token_type_ids");
         Self {
             tokenizer,
             session,
@@ -42,7 +42,7 @@ impl TextRerank {
         TextRerank::list_supported_models()
             .into_iter()
             .find(|m| &m.model == model)
-            .expect("Model not found.")
+            .expect("Model not found in supported models list. This is a bug - please report it.")
     }
 
     pub fn list_supported_models() -> Vec<RerankerModelInfo> {
@@ -67,7 +67,7 @@ impl TextRerank {
         let api = ApiBuilder::from_cache(cache)
             .with_progress(show_download_progress)
             .build()
-            .expect("Failed to build API from cache");
+            .map_err(|e| anyhow::Error::msg(format!("Failed to build API from cache: {}", e)))?;
         let model_repo = api.model(model_name.to_string());
 
         let model_file_name = TextRerank::get_model_info(&model_name).model_file;
@@ -122,13 +122,16 @@ impl TextRerank {
     }
 
     /// Rerank documents using the reranker model and returns the results sorted by score in descending order.
+    ///
+    /// Accepts a query and a collection of documents implementing [`AsRef<str>`].
     pub fn rerank<S: AsRef<str> + Send + Sync>(
         &mut self,
         query: S,
-        documents: Vec<S>,
+        documents: impl AsRef<[S]>,
         return_documents: bool,
         batch_size: Option<usize>,
     ) -> Result<Vec<RerankResult>> {
+        let documents = documents.as_ref();
         let batch_size = batch_size.unwrap_or(DEFAULT_BATCH_SIZE);
         let q = query.as_ref();
 
@@ -138,9 +141,12 @@ impl TextRerank {
             let encodings = self
                 .tokenizer
                 .encode_batch(inputs, true)
-                .expect("Failed to encode batch");
+                .map_err(|e| anyhow::Error::msg(e.to_string()).context("Failed to encode batch"))?;
 
-            let encoding_length = encodings[0].len();
+            let encoding_length = encodings
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Tokenizer returned empty encodings"))?
+                .len();
             let batch_size = batch.len();
             let max_size = encoding_length * batch_size;
 
@@ -176,9 +182,13 @@ impl TextRerank {
             }
 
             let outputs = self.session.run(session_inputs)?;
-            let outputs = outputs["logits"]
+            let outputs = outputs
+                .get("logits")
+                .ok_or_else(|| anyhow::Error::msg("Output does not contain 'logits' key"))?
                 .try_extract_array()
-                .expect("Failed to extract logits tensor");
+                .map_err(|e| {
+                    anyhow::Error::msg(format!("Failed to extract logits tensor: {}", e))
+                })?;
             let batch_scores: Vec<f32> = outputs
                 .slice(s![.., 0])
                 .rows()
@@ -199,6 +209,6 @@ impl TextRerank {
             })
             .collect();
         top_n_result.sort_by(|a, b| a.score.total_cmp(&b.score).reverse());
-        Ok(top_n_result.to_vec())
+        Ok(top_n_result)
     }
 }
